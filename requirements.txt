@@ -1,0 +1,17 @@
+matplotlib==3.5.0
+matplotlib==3.3.4
+matplotlib==3.4.3
+numpy==1.18.5
+numpy==1.15.4
+numpy==1.19.5
+numpy==1.15.1
+numpy==1.14.2
+numpy==1.19.2
+numpy==1.21.2
+numpy==1.21.5
+numpy==1.20.3
+opencv_contrib_python==4.11.0.86
+opencv_python==4.5.5.64
+opencv_python==4.11.0.86
+opencv_python_headless==4.5.5.64
+~pencv_python==4.6.0.66
