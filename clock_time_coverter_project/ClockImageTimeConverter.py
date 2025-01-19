@@ -2,6 +2,8 @@
 Created on Fri Jan 17 09:59:50 2025
 
 @author: ayalac
+
+Converts analog clock to time, converts time to analog clock
 """
 import os
 import sys
@@ -11,12 +13,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-class Point:
+class Point: # a point in a 2D plane
     def __init__(self, x,y):
         self.x=x
         self.y=y
         
-    def get_normalized_point(self, width, height):
+    def get_normalized_point(self, width, height): # normalize point according to the plane it's in
         x_normalized = self.x / width
         y_normalized = self.y / height
         return Point(x_normalized, y_normalized)
@@ -33,6 +35,28 @@ class ClockImageTimeConverter:
         return d
     
     def convert_angle_to_time(self, hour_angle, minute_angle, second_angle):
+        """
+        Computes & returns the hour according to the angle of the hands.
+
+        Parameters
+        ----------
+        hour_angle : FLOAT
+            Hour angle in degrees.
+        minute_angle : FLOAT
+            Minute angle in degrees.
+        second_angle : FLOAT
+            Second angle in degrees.
+
+        Returns
+        -------
+        hour : INT
+            Hour (1-12).
+        minute : INT
+            Minute (0-60).
+        second : INT
+            Second (0-60).
+
+        """
         hour = int(hour_angle*12 / 360)
         if (hour == 0):
             hour = 12
@@ -41,6 +65,24 @@ class ClockImageTimeConverter:
         return hour, minute, second
     
     def get_angle_from_center(self, point, center):
+        """
+        
+
+        Parameters
+        ----------
+        point : POINT
+            The point that we want to compute its angle with the circle's center.
+        center : POINT
+            The center of the circle (clock in our case).
+
+        Returns
+        -------
+        angle : FLOAT
+            The angle between the point, and the negative Y axis (up). 
+            Where the axis center is the center of the circle (clock)
+            The axis: Y positive down and X positive right. I wanted angle 0 to be hour 12.
+
+        """
         dx = point.x - center.x
         dy = point.y - center.y
         
@@ -92,24 +134,24 @@ class ClockImageTimeConverter:
         angle = math.atan2(dy, dx)  # Angle in radians
         return math.degrees(angle)  # Convert to degrees
     
-    # Function to remove double lines (lines with similar lengths and angles)
-    def remove_double_lines(self, lines, length_threshold=2, angle_threshold=1):
+    # Function to remove double lines (lines with similar angles)
+    def remove_double_lines(self, lines, angle_threshold=1):
         unique_lines = []
         lines_to_remove = []
         
         lines = np.array(sorted(lines, key=lambda line: self.line_length(line[0]), reverse=True))
         
         for i, line in enumerate(lines):
-            # line_len = self.line_length(line[0])
             line_ang = self.line_angle(line[0])
             
             is_duplicate = False
             
             for j, unique_line in enumerate(unique_lines):
-                # unique_len = self.line_length(unique_line[0])
                 unique_ang = self.line_angle(unique_line[0])
-                # Check if the length and angle are within the threshold
-                if abs(line_ang - unique_ang) < angle_threshold:
+                
+                # Check if the angle is within the threshold
+                if abs(line_ang - unique_ang) < angle_threshold: # I would also check length if the 
+                                                                    # length is the same but that lead to more issues b/c of overlap
                     is_duplicate = True
                     break
             
@@ -119,6 +161,24 @@ class ClockImageTimeConverter:
         return unique_lines
         
     def get_lines_in_image(self, img):
+        """
+        Using the Hough Lines Probablistic algorithm we find the lines inside our image,
+        this will help us find the clock hands.
+        Prequisite - image most contain only the analog clock's face and has to be of similar format
+        of the clock generated in draw_analog_clock method.
+
+        Parameters
+        ----------
+        img : STRING
+            Path to PNG image file with analog clock. Prequistions:
+                Must be of the same format as the analog clock generated in draw_analog_clock method.
+
+        Returns
+        -------
+        list
+            List of line vectors in image.
+
+        """
         src = cv.imread(cv.samples.findFile(img), cv.IMREAD_GRAYSCALE)
         
         # Check if image is loaded fine
@@ -131,58 +191,22 @@ class ClockImageTimeConverter:
         src = cv.resize(src, (472, 472)) # clock center (0.5, 0.5) in the normalized coordinates
  
         dst = cv.Canny(src, 50, 200, None, 3)
-        
-        # Copy edges to the images that will display the results in BGR
-        cdst = cv.cvtColor(dst, cv.COLOR_GRAY2BGR)
-        cdstP = np.copy(cdst)
-        cdstPnodoublelines = np.copy(cdst)
-        lines = cv.HoughLines(dst, 1, np.pi / 180, 150, None, 0, 0)
-        
-        if lines is not None:
-            for i in range(0, len(lines)):
-                rho = lines[i][0][0]
-                theta = lines[i][0][1]
-                a = math.cos(theta)
-                b = math.sin(theta)
-                x0 = a * rho
-                y0 = b * rho
-                pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
-                pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
-                cv.line(cdst, pt1, pt2, (0,0,255), 3, cv.LINE_AA)
-        
-        
+    
         linesP = cv.HoughLinesP(dst, 1, np.pi / 180, 50, None, 50, 10)
-        # sorted_lines = np.array(sorted(linesP, key=lambda line: self.line_length(line[0]), reverse=True))
-        # linesP[0]=np.array([472/2,472/2,472/2,472/2+70])
-        linesP_noDoubles=[]
+
         if linesP is not None and len(linesP) > 4:
             for i in range(0, len(linesP)):
                 l = linesP[i][0]
                 cv.line(cdstP, (l[0], l[1]), (l[2], l[3]), (0,0,255), 3, cv.LINE_AA)
-                # if (i%2 == 0):
-                #     cv.line(cdstPnodoublelines, (l[0], l[1]), (l[2], l[3]), (0,0,255), 3, cv.LINE_AA)
-                #     linesP_noDoubles.append(linesP[i])
-                #     cv.imshow(f"*Detected Lines (in red) {i}- Probabilistic Line Transform no double lines", cdstPnodoublelines)
-        
-        # remove same length lines (doubles)
+
+        # remove same edge lines (doubles)
         linesP_noDoubles = self.remove_double_lines(linesP)
         for i in range(len(linesP_noDoubles)):
             l = linesP_noDoubles[i][0]
-            cv.line(cdstPnodoublelines, (l[0], l[1]), (l[2], l[3]), (0,0,255), 3, cv.LINE_AA)
-#             cv.imshow(f"NO DOUBLES !!Detected Lines (in red) {i}- Probabilistic Line Transform no double lines", cdstPnodoublelines)
-        # if (i%2 == 0):
-        # cv.line(cdstPnodoublelines, (l[0], l[1]), (l[2], l[3]), (0,0,255), 3, cv.LINE_AA)
-        # linesP_noDoubles.append(linesP[i])
-        # cv.imshow(f"Detected Lines (in red) {i}- Probabilistic Line Transform no double lines", cdstPnodoublelines)
-        # 4debug:            
-        # cv.imshow("Source", src)
-        # cv.imshow("Detected Lines (in red) - Standard Hough Line Transform", cdst)
-        # cv.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
-        # cv.imshow("Detected Lines (in red) - Probabilistic Line Transform no double lines", cdstPnodoublelines)
-        # cv.waitKey()
          
-        return lines, linesP_noDoubles
-    def fathest_point(self, p1, p2, center):
+        return linesP_noDoubles
+    
+    def farthest_point(self, p1, p2, center): # compute farthest point from the center
         l1 = self.line_length([p1.x, p1.y, center.x, center.y])
         l2 = self.line_length([p2.x, p2.y, center.x, center.y])
         
@@ -191,11 +215,36 @@ class ClockImageTimeConverter:
         return p2
     
     def get_time_from_clock_image(self, filename='clknobound.png'):
+        """
+        Returns time of analog clock image.
+
+        Parameters
+        ----------
+        filename : STRING
+            Path to PNG image file with analog clock. Prequistions:
+                Must be of the same format as the analog clock generated in draw_analog_clock method.
+
+        Raises
+        ------
+        Exception
+            If file is of invalid type (not PNG) or if the image doesn't have at least 
+            3 lines (3 clock hands).
+
+        Returns
+        -------
+        hour : INT
+            Hour result (1-12).
+        minute : TYPE
+            Minute result (0-60).
+        second : TYPE
+            Second result (0-60).
+
+        """
         if filename == '' or not filename.lower().endswith('.png'):
             raise Exception("Invalid file name")
 
             
-        lines, linesP = self.get_lines_in_image(filename)
+        linesP = self.get_lines_in_image(filename)
                   
         if len(linesP) < 3: # not enough lines in image
             raise Exception("No valid clock detected")
@@ -203,12 +252,10 @@ class ClockImageTimeConverter:
         hands=[]
         
         for line in linesP[:3]:
-            print(line)
             x1, y1, x2, y2 = line[0]
             p1 = Point(x1,y1)
             p2 = Point(x2,y2)
-            p = self.fathest_point(p1,p2,center=Point(472/2, 472/2))
-            print(f"p={p.x}, {p.y}")
+            p = self.farthest_point(p1,p2,center=Point(472/2, 472/2))
             angle = self.get_angle_from_center(point=p, center=Point(472/2, 472/2))
             length = self.line_length(line[0])
             hands.append((p1, p2, angle, length))
@@ -223,6 +270,29 @@ class ClockImageTimeConverter:
         return hour, minute, second
             
     def draw_analog_clock(self, hour, minute, second):
+        """
+        Creates PNG images of analog clock that shows the time given.
+
+        Parameters
+        ----------
+        hour : INT
+            Hour (1-12).
+        minute : INT
+            Minutes (0-60).
+        second : INT
+            Seconds (0-60).
+
+        Raises
+        ------
+        Exception
+            If the time given is invalid.
+
+        Returns
+        -------
+        plot_path : STRING
+            Path to the generated PNG image of the analog clock.
+
+        """
         clk_center=0.5
         radius=0.45
         
@@ -294,8 +364,3 @@ class ClockImageTimeConverter:
         plt.show()
         
         return plot_path
-
-# c=ClockImageTimeConverter()
-# # c.get_time_from_clock_image('clk2.png')
-# c.get_time_from_clock_image('images/clock_image_1737310524.png')
-# c.draw_analog_clock(4,45,00)
