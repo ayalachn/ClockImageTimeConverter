@@ -20,3 +20,5 @@ hour, minutes, seconds = converter.get_time_from_clock_image('my_analog_clock.pn
   ```python
     pip install -r requirements.txt
   ```
+## Sources:
+https://docs.opencv.org/3.4/d9/db0/tutorial_hough_lines.html
