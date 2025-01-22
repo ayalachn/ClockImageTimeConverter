@@ -23,6 +23,12 @@ class Point: # a point in a 2D plane
         y_normalized = self.y / height
         return Point(x_normalized, y_normalized)
     
+    def euclidean_distance(self, point):
+        p1 = np.array((self.x, self.y))
+        p2 = np.array((point.x, point.y))
+        return np.linalg.norm([p1 - p2])
+
+        
 class ClockImageTimeConverter:    
     def __init__(self):
         print("Hello from clock converter constructor!")
@@ -34,35 +40,37 @@ class ClockImageTimeConverter:
         d = np.linalg.norm([point1 - point2])  # Euclidean distance
         return d
     
-    def convert_angle_to_time(self, hour_angle, minute_angle, second_angle):
+    def convert_angle_to_time(self, hour_angle, minute_angle):
         """
-        Computes & returns the hour according to the angle of the hands.
-
+        Computes & returns the hour and minute according to the angles of the hands.
+    
         Parameters
         ----------
         hour_angle : FLOAT
-            Hour angle in degrees.
+            Hour angle in degrees (0 to 360).
         minute_angle : FLOAT
-            Minute angle in degrees.
-        second_angle : FLOAT
-            Second angle in degrees.
-
+            Minute angle in degrees (0 to 360).
+    
         Returns
         -------
         hour : INT
             Hour (1-12).
         minute : INT
-            Minute (0-60).
-        second : INT
-            Second (0-60).
-
+            Minute (0-59).
         """
-        hour = int(hour_angle*12 / 360)
-        if (hour == 0):
-            hour = 12
-        minute = int(minute_angle*60 / 360)
-        second = int(second_angle*60 / 360)
-        return hour, minute, second
+        # Calculate minute based on the minute_angle (mapping 0-360 degrees to 0-59 minutes)
+        minute = int(minute_angle * 60 / 360)  # Minute is an integer (0 to 59)
+    
+        # Calculate hour based on the hour_angle (mapping 0-360 degrees to 0-12 hours)
+        if minute >= 30:
+            hour= int(hour_angle * 12 / 360)
+        else:
+            hour = round(hour_angle * 12 / 360)  # Hour in range (0 to 12)
+        
+        if hour == 0:
+            hour =12
+        return hour, minute
+
     
     def get_angle_from_center(self, point, center):
         """
@@ -86,9 +94,18 @@ class ClockImageTimeConverter:
         dx = point.x - center.x
         dy = point.y - center.y
         
+        if dx == 0 and dy < 0:
+            return 0
+        if dx == 0 and dy > 0:
+            return 180
+        if dy == 0 and dx < 0:
+            return 270
+        if dy == 0 and dx > 0:
+            return 90
+        
         # find point's quarter position
         quarter_num=0
-        if point.x > center.x and point.y > center.y:
+        if point.x > center.x and point.y >= center.y:
             quarter_num=1
         elif point.x < center.x and point.y > center.y:
             quarter_num=2
@@ -97,7 +114,7 @@ class ClockImageTimeConverter:
         elif point.x > center.x and point.y < center.y:
             quarter_num=3
 
-        angle=0
+        angle=180
         
         # Normalize the angle to [0, 360] range clockwise from the negative Y-axis (up)
         if quarter_num==1:
@@ -122,7 +139,7 @@ class ClockImageTimeConverter:
             if dx ==0:
                 0
             rad = math.atan(dy/ dx)
-            angle = -1*math.degrees(rad) 
+            angle = math.degrees(rad) 
             return 270+angle
         
         return angle
@@ -134,24 +151,36 @@ class ClockImageTimeConverter:
         angle = math.atan2(dy, dx)  # Angle in radians
         return math.degrees(angle)  # Convert to degrees
     
-    # Function to remove double lines (lines with similar angles)
-    def remove_double_lines(self, lines, angle_threshold=1):
+    def are_angles_close(self, angle1, angle2, angle_threshold=10):
+        """Check if the angles are close within a threshold (in degrees)."""
+        # Normalize angle difference to be within [0, 180] degrees (shortest distance on a circle)
+        diff = abs(angle1 - angle2) % 360  # Ensure the difference is within [0, 360]
+        if diff > 180:
+            diff = 360 - diff  # Shortest distance on a circle (wraparound)
+        return diff < angle_threshold  # Return True if the angles are within the threshold
+  
+    # Function to remove double lines (lines with similar angles and lengths)
+    def remove_double_lines(self, lines, length_threshold=100, angle_threshold=2):
         unique_lines = []
         lines_to_remove = []
         
         lines = np.array(sorted(lines, key=lambda line: self.line_length(line[0]), reverse=True))
         
+        if len(lines) == 1:
+            return lines
+        
         for i, line in enumerate(lines):
-            line_ang = self.line_angle(line[0])
-            
+            p = self.farthest_point(Point(line[0][0], line[0][1]), Point(line[0][2], line[0][3]),center=Point(472/2, 472/2))
+            line_ang = self.get_angle_from_center(point=p, center=Point(472/2, 472/2))
+            line_len = self.line_length(line[0])
             is_duplicate = False
             
             for j, unique_line in enumerate(unique_lines):
-                unique_ang = self.line_angle(unique_line[0])
-                
-                # Check if the angle is within the threshold
-                if abs(line_ang - unique_ang) < angle_threshold: # I would also check length if the 
-                                                                    # length is the same but that lead to more issues b/c of overlap
+                p_unique = self.farthest_point(Point(unique_line[0][0], unique_line[0][1]), Point(unique_line[0][2], unique_line[0][3]),center=Point(472/2, 472/2))
+                unique_ang = self.get_angle_from_center(point=p_unique, center=Point(472/2, 472/2))
+                unique_len = self.line_length(unique_line[0])
+
+                if self.are_angles_close(line_ang, unique_ang, angle_threshold) and abs(line_len-unique_len) < length_threshold :
                     is_duplicate = True
                     break
             
@@ -160,7 +189,7 @@ class ClockImageTimeConverter:
         
         return unique_lines
         
-    def get_lines_in_image(self, img):
+    def get_lines_in_image(self, img, debug=0):
         """
         Using the Hough Lines Probablistic algorithm we find the lines inside our image,
         this will help us find the clock hands.
@@ -190,21 +219,25 @@ class ClockImageTimeConverter:
         # reshape image to have a constant center coordinate
         src = cv.resize(src, (472, 472)) # clock center (0.5, 0.5) in the normalized coordinates
  
-        dst = cv.Canny(src, 50, 200, None, 3)
-    
-        linesP = cv.HoughLinesP(dst, 1, np.pi / 180, 50, None, 50, 10)
+        dst = cv.Canny(src, 200, 300, None, 3)
+        cdst = cv.cvtColor(dst, cv.COLOR_GRAY2BGR)
+        cdstP = np.copy(cdst)
+        
+        linesP = cv.HoughLinesP(image=dst, rho=1, theta=np.pi / 180, threshold =23, minLineLength =80, maxLineGap =10)
+        linesP = np.array(sorted(linesP, key=lambda line: self.line_length(line[0]), reverse=True))
+        linesP = self.shift_lines(linesP, Point(472/2, 472/2))
+        linesP= self.remove_double_lines(linesP)
 
-        if linesP is not None and len(linesP) > 4:
+        if linesP is not None:
             for i in range(0, len(linesP)):
                 l = linesP[i][0]
                 cv.line(cdstP, (l[0], l[1]), (l[2], l[3]), (0,0,255), 3, cv.LINE_AA)
+                if debug:
+                    cv.imshow(f"Detected Lines (in red) {i}- Probabilistic Line Transform no double lines", cdstP)
 
-        # remove same edge lines (doubles)
-        linesP_noDoubles = self.remove_double_lines(linesP)
-        for i in range(len(linesP_noDoubles)):
-            l = linesP_noDoubles[i][0]
-         
-        return linesP_noDoubles
+        if debug:
+            cv.waitKey()
+        return linesP
     
     def farthest_point(self, p1, p2, center): # compute farthest point from the center
         l1 = self.line_length([p1.x, p1.y, center.x, center.y])
@@ -214,7 +247,30 @@ class ClockImageTimeConverter:
             return p1
         return p2
     
-    def get_time_from_clock_image(self, filename='clknobound.png'):
+    def shift_lines(self, lines, center_point):
+        dy=0
+        dx=0
+        
+        for i, line in zip(range(len(lines)), lines):
+            x1, y1, x2, y2 = line[0]
+            p1 = Point(x1,y1)
+            p2 = Point(x2, y2)
+            
+            dist_p1 = center_point.euclidean_distance(p1)
+            dist_p2 = center_point.euclidean_distance(p2)
+            if  dist_p1 < dist_p2:
+                shift_x = p1.x - center_point.x
+                shift_y = p1.y - center_point.y
+            else:
+                shift_x = p2.x - center_point.x
+                shift_y = p2.y - center_point.y
+                
+            lines[i][0] = np.array([x1 - shift_x, y1 - shift_y, x2 - shift_x, y2 - shift_y])
+
+        return lines
+            
+            
+    def get_time_from_clock_image(self, filename='clknobound.png', debug=0):
         """
         Returns time of analog clock image.
 
@@ -244,14 +300,26 @@ class ClockImageTimeConverter:
             raise Exception("Invalid file name")
 
             
-        linesP = self.get_lines_in_image(filename)
+        linesP = self.get_lines_in_image(filename, debug)
                   
-        if len(linesP) < 3: # not enough lines in image
+        if len(linesP) < 1: # not enough lines in image
             raise Exception("No valid clock detected")
-            
+        
+        linesP = self.shift_lines(linesP, Point(472/2, 472/2))
         hands=[]
         
-        for line in linesP[:3]:
+        if (len(linesP)==1):
+            x1, y1, x2, y2 = linesP[0][0]
+            p1 = Point(x1,y1)
+            p2 = Point(x2,y2)
+            p = self.farthest_point(p1,p2,center=Point(472/2, 472/2))
+            angle = self.get_angle_from_center(point=p, center=Point(472/2, 472/2))
+            hour, minute = self.convert_angle_to_time(angle, angle)
+            
+            print(f'{hour}:{minute}')
+            return hour, minute
+        
+        for line in linesP:
             x1, y1, x2, y2 = line[0]
             p1 = Point(x1,y1)
             p2 = Point(x2,y2)
@@ -260,16 +328,15 @@ class ClockImageTimeConverter:
             length = self.line_length(line[0])
             hands.append((p1, p2, angle, length))
             
-        second_hand = hands[0]
-        minute_hand = hands[1]
-        hour_hand = hands[2]
+        minute_hand = hands[0]
+        hour_hand = hands[1]
         
-        hour, minute, second = self.convert_angle_to_time(hour_hand[2], minute_hand[2], second_hand[2])
+        hour, minute = self.convert_angle_to_time(hour_hand[2], minute_hand[2])
         
-        print(f'{hour}:{minute}:{second}')
-        return hour, minute, second
+        print(f'{hour}:{minute}')
+        return hour, minute
             
-    def draw_analog_clock(self, hour, minute, second):
+    def draw_analog_clock(self, hour, minute):
         """
         Creates PNG images of analog clock that shows the time given.
 
@@ -279,8 +346,6 @@ class ClockImageTimeConverter:
             Hour (1-12).
         minute : INT
             Minutes (0-60).
-        second : INT
-            Seconds (0-60).
 
         Raises
         ------
@@ -296,7 +361,7 @@ class ClockImageTimeConverter:
         clk_center=0.5
         radius=0.45
         
-        if hour < 0 or hour > 12 or minute < 0 or minute > 60 or second < 0 or second > 60:
+        if hour < 0 or hour > 12 or minute < 0 or minute > 60:
             raise Exception("Invalid input time")
         
         
@@ -331,16 +396,10 @@ class ClockImageTimeConverter:
         ax.plot([clk_center, hour_x], [clk_center, hour_y], color='black', lw=6)
         
         # Draw the minute hand
-        minute_angle = np.deg2rad(90 - 360*((minute)/60 + (second)/3600))
+        minute_angle = np.deg2rad(90 - 360*((minute)/60))
         minute_x = clk_center + 0.35 * np.cos(minute_angle)
         minute_y = 0.5 + 0.35 * np.sin(minute_angle)
         ax.plot([0.5, minute_x], [0.5, minute_y], color='blue', lw=4)
-        
-        # Draw the second hand
-        second_angle = np.deg2rad(90 - 360 * second / 60)
-        second_x = clk_center + 0.4 * np.cos(second_angle)
-        second_y = clk_center + 0.4 * np.sin(second_angle)
-        ax.plot([clk_center, second_x], [clk_center, second_y], color='red', lw=2)
     
         # Draw the center of the clock
         ax.plot(0.5, 0.5, 'ko', markersize=8)
