@@ -13,15 +13,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 
+class Line(self, line):
+    def __init__(self, line):
+        self.p1 = Point(line[0], line[1])
+        self.p2 = Point(line[2], line[3])
+    
+    def get_line_length(self):
+        return p1.euclidean_distance(p2)
+    
+    
 class Point: # a point in a 2D plane
     def __init__(self, x,y):
         self.x=x
         self.y=y
         
-    def get_normalized_point(self, width, height): # normalize point according to the plane it's in
-        x_normalized = self.x / width
-        y_normalized = self.y / height
-        return Point(x_normalized, y_normalized)
+    # def get_normalized_point(self, width, height): # normalize point according to the plane it's in
+    #     x_normalized = self.x / width
+    #     y_normalized = self.y / height
+    #     return Point(x_normalized, y_normalized)
     
     def euclidean_distance(self, point):
         p1 = np.array((self.x, self.y))
@@ -39,7 +48,7 @@ class ClockImageTimeConverter:
         point2 = np.array((x2, y2))
         d = np.linalg.norm([point1 - point2])  # Euclidean distance
         return d
-    
+        
     def convert_angle_to_time(self, hour_angle, minute_angle):
         """
         Computes & returns the hour and minute according to the angles of the hands.
@@ -160,7 +169,7 @@ class ClockImageTimeConverter:
         return diff < angle_threshold  # Return True if the angles are within the threshold
   
     # Function to remove double lines (lines with similar angles and lengths)
-    def remove_double_lines(self, lines, length_threshold=100, angle_threshold=2):
+    def remove_double_lines(self, lines, length_threshold=100, angle_threshold=5):
         unique_lines = []
         lines_to_remove = []
         
@@ -189,7 +198,7 @@ class ClockImageTimeConverter:
         
         return unique_lines
         
-    def get_lines_in_image(self, img, debug=0):
+    def get_lines_in_image(self, src, debug=0):
         """
         Using the Hough Lines Probablistic algorithm we find the lines inside our image,
         this will help us find the clock hands.
@@ -198,9 +207,8 @@ class ClockImageTimeConverter:
 
         Parameters
         ----------
-        img : STRING
-            Path to PNG image file with analog clock. Prequistions:
-                Must be of the same format as the analog clock generated in draw_analog_clock method.
+        src : STRING
+           Preprocessed image cropped to clock bounding box.
 
         Returns
         -------
@@ -208,13 +216,6 @@ class ClockImageTimeConverter:
             List of line vectors in image.
 
         """
-        src = cv.imread(cv.samples.findFile(img), cv.IMREAD_GRAYSCALE)
-        
-        # Check if image is loaded fine
-        if src is None:
-            print ('Error opening image!')
-            print ('Usage: hough_lines.py [image_name -- default ' + default_file + '] \n')
-            return []
         
         # reshape image to have a constant center coordinate
         src = cv.resize(src, (472, 472)) # clock center (0.5, 0.5) in the normalized coordinates
@@ -268,8 +269,41 @@ class ClockImageTimeConverter:
             lines[i][0] = np.array([x1 - shift_x, y1 - shift_y, x2 - shift_x, y2 - shift_y])
 
         return lines
+ 
+    def get_clock_circle(self, filename, debug=0):
+        img = cv.imread(filename, cv.IMREAD_GRAYSCALE)
+        assert img is not None, "file could not be read, check with os.path.exists()"
+        cimg = cv.cvtColor(img,cv.COLOR_GRAY2BGR) 
+        circles = cv.HoughCircles(img,cv.HOUGH_GRADIENT,1,20,
+                                    param1=50,param2=30,minRadius=10,maxRadius=0)
+        if circles is not None:
+            circles = np.uint16(np.around(circles))
+            circles = np.array(sorted(circles, key=lambda circle: circle[2], reverse=True))
             
+            x, y, radius = circles[0][0]
             
+            mask = np.zeros_like(img)
+            
+            cv.circle(mask, (x,y), radius, (255,255,255), -1)
+            
+            result = cv.bitwise_and(img, mask)
+            
+            # Crop the image to the circle's bounding box (optional)
+            x1, y1 = max(x - radius, 0), max(y - radius, 0)
+            x2, y2 = min(x + radius, img.shape[1]), min(y + radius, img.shape[0])
+            cropped_image = result[y1:y2, x1:x2]
+            
+            # Show the result
+            if debug:
+                cv.imshow("Cropped Image", cropped_image)
+                cv.waitKey(0)
+                cv.destroyAllWindows()
+            
+            return cropped_image
+        else:
+            print("No circles detected!")
+            return None
+     
     def get_time_from_clock_image(self, filename='clknobound.png', debug=0):
         """
         Returns time of analog clock image.
@@ -296,11 +330,13 @@ class ClockImageTimeConverter:
             Second result (0-60).
 
         """
-        if filename == '' or not filename.lower().endswith('.png'):
+        if filename == '' or not (filename.lower().endswith('.png') or filename.lower().endswith('.jpg')):
             raise Exception("Invalid file name")
 
-            
-        linesP = self.get_lines_in_image(filename, debug)
+        cropped_image = self.get_clock_circle(filename, debug) 
+        if cropped_image == None:
+            raise Exception("Invalid image!! no clocks found!!")
+        linesP = self.get_lines_in_image(cropped_image, debug)
                   
         if len(linesP) < 1: # not enough lines in image
             raise Exception("No valid clock detected")
