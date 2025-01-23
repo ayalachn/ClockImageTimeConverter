@@ -28,7 +28,7 @@ Let's get the time of this analog clock:
 Code:
 ```python
 converter = ClockImageTimeConverter()
-hour_, minute_= converter.get_time_from_clock_image('H-4570.png')
+hour_, minute_= converter.get_time_from_clock_image('images/H-4570.png')
 ```
 Result:
 
