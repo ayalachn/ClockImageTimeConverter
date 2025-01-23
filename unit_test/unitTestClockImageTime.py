@@ -110,6 +110,18 @@ class unitTestClockImageTime(unittest.TestCase):
 
         self.assertEqual(hour, hour_)
         self.assertAlmostEqual(minute, minute_, delta=1)
+    def test_clock_converter_all_options(self):
+
+        for hour in range(1,12):
+            for minute in range(0,60):
+                # create analog clock image
+                img_result_path = self.converter.draw_analog_clock(hour=hour, minute=minute)
+                
+                # check result
+                hour_, minute_= self.converter.get_time_from_clock_image(img_result_path)
+        
+                self.assertEqual(hour, hour_)
+                self.assertAlmostEqual(minute, minute_, delta=1)
 if __name__ == "__main__":
     unittest.main()
     
