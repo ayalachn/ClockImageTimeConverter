@@ -44,6 +44,8 @@ class ClockImageTimeConverter:
         else:
             hour = round(hour_angle * 12 / 360)
         
+        if hour == 6 and minute > 58:
+            hour = 5
         if hour == 0:
             hour =12
         return hour, minute
@@ -56,7 +58,7 @@ class ClockImageTimeConverter:
         return diff < angle_threshold  # Return True if the angles are within the threshold
   
     # Remove double lines (lines with similar angles and lengths)
-    def remove_double_lines(self, lines, length_threshold=100, angle_threshold=5):
+    def remove_double_lines(self, lines, length_threshold=100, angle_threshold=3):
         unique_lines = []
         lines_to_remove = []
         
@@ -79,7 +81,7 @@ class ClockImageTimeConverter:
                 unique_ang = p_unique.get_angle_from_center(center=Point(472/2, 472/2))
                 unique_len = unique_l.get_line_length()
 
-                if self.are_angles_close(line_ang, unique_ang, angle_threshold) and abs(line_len-unique_len) < length_threshold :
+                if self.are_angles_close(line_ang, unique_ang, angle_threshold):
                     is_duplicate = True
                     break
             
@@ -119,7 +121,7 @@ class ClockImageTimeConverter:
         cdstP = np.copy(cdst)
         ##
         
-        linesP = cv.HoughLinesP(image=dst, rho=1, theta=np.pi / 180, threshold =23, minLineLength =80, maxLineGap =10)
+        linesP = cv.HoughLinesP(image=dst, rho=1, theta=np.pi / 180, threshold =30, minLineLength =65, maxLineGap =9)
         linesP = np.array(sorted(linesP, key=lambda line: Line(line[0]).get_line_length(), reverse=True))
         linesP = self.shift_lines(linesP, Point(472/2, 472/2))
         linesP= self.remove_double_lines(linesP)
@@ -233,7 +235,7 @@ class ClockImageTimeConverter:
         if len(linesP) < 1: # not enough lines in image
             raise Exception("No valid clock detected")
         
-        linesP = self.shift_lines(linesP, Point(472/2, 472/2))
+        # linesP = self.shift_lines(linesP, Point(472/2, 472/2))
         hands=[]
         
         if (len(linesP)==1): # hour and minute hand are overlapping
