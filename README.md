@@ -2,13 +2,18 @@
 Converts time to analog clock image, converts analog clock image to time.
 
 ## Create analog clock
-Inorder to create an analog clock image (PNG format) call the *draw_analog_clock* method that's in the *ClockImageTimeConverter* class.
+Inorder to create an analog clock image call the *draw_analog_clock* method that's in the *ClockImageTimeConverter* class.
 Usage example - create an analog clock that shows the time _10:15_:
 ```python
 converter = ClockImageTimeConverter()
 converter.draw_analog_clock(10, 15)
 ```
+The default image type is PNG, other options can be JPG or TIF.
 
+Example:
+```python
+converter.draw_analog_clock(10, 15, "jpg")
+```
 Result:
 
 ![image](https://github.com/user-attachments/assets/ad02d3b9-4de4-49cd-a390-36d6a43de02b)
@@ -35,7 +40,7 @@ Result:
 ![image](https://github.com/user-attachments/assets/a96c7fa9-6ba1-442d-a4ca-0b56cf5c81e7)
 
 ### Prequisites
-- No support for analog clock image with second hand.
+- No support for analog clock image with second hand at the moment.
 - Install libraries used in this project (requirements.txt):
   ```python
     pip install -r requirements.txt
