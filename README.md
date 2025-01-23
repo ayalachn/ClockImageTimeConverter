@@ -2,7 +2,7 @@
 Converts time to analog clock image, converts analog clock image to time.
 
 ## Create analog clock
-Inorder to create an analog clock image call the *draw_analog_clock* method that's in the *ClockImageTimeConverter* class.
+In order to create an analog clock image call the *draw_analog_clock* method that's in the *ClockImageTimeConverter* class.
 Usage example - create an analog clock that shows the time _10:15_:
 ```python
 converter = ClockImageTimeConverter()
