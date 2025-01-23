@@ -352,6 +352,5 @@ class ClockImageTimeConverter:
         plot_path = f'images/clock_image_{int(ts)}.{image_format}'
         plt.tight_layout()
         plt.savefig(plot_path, dpi=100)
-        plt.show()
         
         return plot_path
