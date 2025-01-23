@@ -4,7 +4,7 @@ Created on Sun Jan 19 00:29:50 2025
 
 @author: ayalac
 
-Unit test for the ClockImageTimeConverter
+A simple unit test for the ClockImageTimeConverter to check the clock image to time convertion functionality.
 """
 import unittest
 
@@ -12,7 +12,7 @@ import sys
 sys.path.insert(1, '../clock_time_coverter_project')
 
 from ClockImageTimeConverter import ClockImageTimeConverter
-from ClockImageTimeConverter import Point
+from utils.PointManager import Point
 
 class unitTestClockImageTime(unittest.TestCase):
     
